@@ -240,6 +240,7 @@ ggplot(data, aes(x = total_value)) +
 <p>🔗 <a href="https://htmlcheatsheet.com/css/">Referensi Cheatsheet CSS</a></p>
 
 Nama = santi amelia
+Kelas = C
 
 
 
