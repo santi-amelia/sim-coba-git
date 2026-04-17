@@ -242,6 +242,13 @@ ggplot(data, aes(x = total_value)) +
 Nama = santi amelia
 Kelas = C
 
+Jadwal kuliah
+Senin = 
+Selasa=
+Rabu=
+Kamis=
+Jumat=
+
 
 
 
