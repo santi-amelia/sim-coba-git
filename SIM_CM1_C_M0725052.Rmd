@@ -1,0 +1,309 @@
+---
+title: "Laporan Analisis Sakila DB"
+author: "Santi Amelia"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<style>
+/* Mengatur seluruh blok penomoran merujuk lurus ke kiri */
+ol {
+  padding-left: 20px;
+  margin-left: 0px;
+}
+
+/* Mengatur jarak renggang teks setelah nomor secara otomatis */
+ol li {
+  margin-left: -5px;
+  padding-left: 15px; /* Ubah angka ini jika ingin jarak teksnya lebih lebar lagi */
+  margin-bottom: 6px; /* Memberikan sedikit jarak antar baris poin agar rapi */
+}
+</style>
+
+```{r loadlibrary, warning=FALSE}
+# Memuat paket yang diperlukan untuk koneksi database, analisis data, dan visualisasi
+library(odbc)
+library(DBI)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r joined data, warning=FALSE}
+
+
+```
+
+
+# Pendahuluan
+Laporan ini menyajikan hasil analisis dari insight yang penulis ambil dari dataset Sakila. Insight data yang diambil adalah siapa pelanggan yang paling banyak membayar untuk setiap kategori film, kategori apa yang paling menguntungkan bagi perusahaan, dan mengetahui hubungan total pembayaran pelanggan dengan aktivitas rental. Variabel yang diambil untuk menganalisis insight itu adalah customer_name, name_category, dan total_payment. Dan tabel yang dibutuhkan untuk mengambil variabel itu adalah customer, payment, rental, inventory, film_category, dan category. Proses ini mengitegrasikan SQL untuk pengambilan data, R untuk analisis dan visualisasi, dan GitHub untuk mempublish laporan tugas.
+
+## Insight Data
+<ol>
+<li> Menganalisis siapa pelanggan yang paling banyak membayar untuk setiap kategori film. 
+<li> Menganalisis kategori apa yang paling menguntungkan bagi perusahaan. 
+<li> Mengetahui hubungan total pembayaran pelanggan dengan aktivitas rental. 
+<ol>
+
+# Koneksi Database 
+Langkah pertama yaitu membangun koneksi antara Rstudio dan database SQL menggunakan fungsi dbConnect().
+```{r koneksidata}
+con = dbConnect(odbc(),
+                 Driver = "MySQL ODBC 8.0 ANSI Driver",
+                 Server = "127.0.0.1",
+                 UID = "root",
+                 PWD = "lup4p4ssw0rd",
+                 Port = 3306,
+                 Database = "sakila")
+```
+
+# Pengambilan Data
+Setelah koneksi terjalin, langkah selanjutnya yaitu pengambilan data yaitu mengambil blok kode SQL untuk mendapatkan variabel yang dibutuhkan sesuai dengan insight dan masukkan itu ke dalam data frame data_full.
+```{r pengambilandata}
+# Penggabungan Data
+data_full <- dbGetQuery(con, "SELECT 
+    c.customer_id,
+    CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+    p.amount AS total_spent,
+    cat.name AS name_category
+FROM customer c
+LEFT JOIN payment p 
+	ON c.customer_id = p.customer_id
+LEFT JOIN rental r 
+	ON p.rental_id = r.rental_id
+LEFT JOIN inventory i 
+	ON r.inventory_id = i.inventory_id
+LEFT JOIN film_category f 
+	ON i.film_id = f.film_id
+LEFT JOIN category cat 
+	ON f.category_id = cat.category_id;
+")
+
+# Tampilkan data yang sudah diambil
+head(data_full)
+```
+
+# Analisis Data
+<p style="font-weight: bold;">Menganalisis Siapa Pelanggan yang Paling Banyak Membayar untuk Setiap Kategori Film.</p>
+
+Selanjutnya untuk mengetahui siapa pelanggan yang paling banyak membayar untuk setiap kategori film, dilakukan analisis sebagai berikut.
+```{r top customer}
+# Siapa pelanggan yang paling membayar untuk setiap kategori film
+top_customers_per_category <- data_full %>%
+  # 1. Hitung total pembayaran per pelanggan di setiap kategori
+  group_by(name_category, customer_name) %>%
+  summarise(total_payment = sum(total_spent, na.rm = TRUE), .groups = 'drop') %>%
+  
+  # 2. Ambil pelanggan dengan total_payment terbesar untuk setiap kategori (name)
+  group_by(name_category) %>%
+  slice_max(order_by = total_payment, n = 1) %>%
+  ungroup()
+
+# Tampilkan hasil
+print(top_customers_per_category)
+```
+
+Interpretasi Hasil:
+
+Berdasarkan analisis di atas didapatkan bahwa untuk kategori film "Action" pelanggan dengan total pembayaran paling banyak adalah ROY WHITING, "Animation" adalah KARL SEAL, "Children" adalah ALVIN DELOACH, "Classics" adalah MAE FLETCHER, "Comedy" adalah TOMMY COLLAZO, dan "Documentary" adalah JESUS MCCARTNEY. Dengan masing-masing total pembayaran adalah 32.94, 38.92, 27.95, 24.97, 38.95, 29.94. Diharapkan setelah melakukan analisis ini, perusahaan dapat mengetahui pelanggan setia mereka dan dapat mempertahankan pelanggan setia itu. Contohnya seperti membuat kartu member dengan ketentuan dan manfaat yang dapat mempertahankan pelanggan setia serta dapat meningkatkan pelanggan baru.
+
+<p style="font-weight: bold;"> Menganalisis Kategori Apa yang Paling Menguntungkan bagi Perusahaan.</p> 
+Kemudian untuk mengetahui kategori film apa yang menguntungkan bagi perusahaan, dilakukan analisis sebagai berikut.
+
+```{r top category}
+# Tampilkan kategori film yang menghasilkan payment terbesar
+top_category <- data_full %>%
+  group_by(name_category) %>%
+  summarise(total_payment = sum(total_spent), .groups = 'drop') %>%
+  slice_max(order_by = total_payment)
+  
+head(top_category)
+```
+
+Interpretasi Hasil:
+
+Berdasarkan analisis di atas, diketahui kategori film dengan total pembayaran atau keuntungan paling banyak adalah kategori "Sport". Dengan total pembayaran sebesar 5314.21 dolar. Artinya lebih banyak customer yang menyukai film dengan kategori "Sports" daripada film dengan kategori lain. Jadi, perusahaan dapat memanfaatkan informasi untuk meningkatkan keuntungan.
+
+<p style="font-weight: bold;"> Mengetahui Hubungan Aktivitas rental dengan Total Pembayaran Pelanggan.</p>
+
+Untuk mengukur kekuatan hubungan antara aktivitas rental dan pembayaran, digunakan perhitungan statistik Koefisien Korelasi Pearseon.
+Secara matematis, kekuatan hubungan ini dihitung menggunakan rumus korelasi Pearson ($r$) sebagai berikut:
+
+$$r = \frac{n \sum xy - (\sum x)(\sum y)}{\sqrt{[n \sum x^2 - (\sum x)^2][n \sum y^2 - (\sum y)^2]}}$$
+Dimana:
+<ul>
+  <li> $n$ = Jumlah total pelanggan terdaftar.
+  <li> $x$ = Aktivitas rental (frekuensi penyewaan pelanggan).
+  <li> $y$ = Total nominal pembayawan yang dilakukan pelanggan.
+</ul>
+
+Dari perhitungan statistik itu, akan dilakukan pengujian hipotesis untuk menganalisis hubungan korelasi antar aktivitas rental dengan total pembayaran pelanggan.
+
+<p style="font-weight: bold;"> Uji Hipotesis </p>
+
+<ol>
+<li> Hipotesis </li>
+<p style="padding-left: 10px;"> $H_0: \rho = 0$ (Tidak terdapat hubungan korelasi linear yang signifikan antara aktivitas rental dengan total pembayaran pelanggan) </p>
+
+<p style="padding-left: 10px;"> $H_1: \rho \neq 0$ (Terdapat hubungan korelasi linear yang signifikan antara aktivitas rental dengan total pembayaran pelanggan) </p>
+
+<li> Taraf Signifikansi </li>
+<p style="padding-left: 10px;"> Taraf signifikansi yang digunakan adalah $\alpha = 0.05$. </p>
+
+<li> Statistik Uji: </li>
+$$t = \frac{r \sqrt{n-2}}{\sqrt{1-r^2}}$$
+
+<li> Kriteria Keputusan </li>
+- Jika $p\text{-value} < \alpha$, maka $H_0$ ditolak.
+- Jika $p\text{-value} \geq \alpha$, maka $H_0$ gagal ditolak.
+
+<li> Implementasi di R </li>
+```{r uji korelasi}
+customers_rental_analysis <- data_full %>%
+  group_by(customer_id, customer_name) %>%
+  summarise(frekuensi = n(), 
+            total_payment = sum(total_spent, na.rm = TRUE), 
+            rata2_payment_per_rental = mean(total_spent, na.rm = TRUE),
+            .groups = "drop")
+
+# Menghitung angka korelasi antara total rental dan total payment
+korelasi <- cor.test(
+  x = customers_rental_analysis$frekuensi,
+  y = customers_rental_analysis$total_payment, 
+  method = "pearson")
+
+print(korelasi)
+```
+
+<li> Hasil </li>
+<p style="padding-left: 10px;"> Diperoleh $p\text{-value} = 2.2e-16$, sehingga $H_0$ ditolak. </p>
+
+<li> Kesimpulan </li>
+<p style="padding-left: 10px;"> Terdapat hubungan korelasi linear yang signifikan antara aktivitas rental dengan total pembayaran pelanggan. Artinya semakin tinggi aktivitas rental semakin tinggi juga total pembayaran pelanggannya. </p>
+</ol>
+
+# Visualisasi Data
+<p style="font-weight: bold;">Visualisasi Pelanggan yang Paling Banyak Membayar untuk Setiap Kategori Film.</p>
+
+```{r top spent pelanggan}
+ggplot(top_customers_per_category,
+       aes(x = reorder(customer_name, total_payment),
+           y = total_payment,
+           fill = name_category)) +
+
+  geom_col(show.legend = FALSE, width = 0.7) +
+
+  # Menampilkan angka pada bar
+  geom_text(aes(label = round(total_payment, 1)),
+            hjust = -0.2,
+            size = 3.5) +
+
+  # Menampilkan nama kategori pada bar
+  geom_text(aes(label = name_category),
+            hjust = 2,
+            color = "white",
+            size = 3.5,
+            fontface = "bold") +
+
+  # Membalik koordinat agar nama customer lebih jelas
+  coord_flip() +
+
+  labs(
+    title = "Pelanggan dengan Pembayaran Tertinggi di Setiap Kategori Film",
+    subtitle = "Berdasarkan Total Payment Customer",
+    x = "Nama Pelanggan",
+    y = "Total Pengeluaran (USD)"
+  ) +
+
+  # Theme lebih bersih
+  theme_minimal(base_size = 12) +
+
+  theme(
+    plot.title = element_text(
+      face = "bold",
+      size = 16,
+      hjust = 0.5
+    ),
+
+    plot.subtitle = element_text(
+      size = 11,
+      hjust = 0.5
+    ),
+
+    strip.text = element_text(
+      face = "bold",
+      size = 10
+    ),
+
+    axis.text.y = element_text(size = 8),
+
+    panel.grid.minor = element_blank(),
+
+    panel.spacing = unit(1, "lines")
+  ) +
+
+  # Memberi ruang agar label angka tidak terpotong
+  expand_limits(y = max(top_customers_per_category$total_payment) + 10)
+```
+
+Interpretasi Hasil:
+
+Grafik menunjukkan Tommy Collazo adalah pelanggan dengan pembayaran tertinggi di seluruh kategori film yang ada. Tommy Collazo membelanjakan 39 USD khusus untuk kategori film Comedy. Di grafik itu juga menunjukkan Mae Fletcher sebagai pelanggan dengan pembayaran terendah di seluruh kategori film. Dengan membelankan 25 USD khusus untuk kategori film Classics. Meskipun Mae Fletcher paling rendah, tapi Mae tetap berstatus pelanggan dengan pembayaran tertinggi di kategori film Classics.
+    Rentang pengeluaran para pelanggan itu di setiap kategori berkisar antara 25 sampai 39. Jarak itu tidak terlalu tinggi, menandakan bahwa kekuatan belanja dari para pelanggan di berbagai kategori relatif merata dan tidak hanya bergantung pada satu kategori tertentu saja.
+    Berdasarkan grafik itu, perusahaan harus menjaga loyalitas dari para pelanggan yang ada di grafik. Karena mereka adalah pelanggan setia bagi perusahaan. Untuk menjaga loyalitas mereka, perusahaan dapat memberikan kartu member atau status anggota premium.
+    Kemudian, perusahaan dapat mengevaluasi kategori film Classics dan Children yang memiliki nilai relatif rendah. Tujuannya agar meningkatkan keuntungan.
+
+
+<p style="font-weight: bold;"> Visualisasi Kategori Paling Menguntungkan bagi Perusahaan.</p> 
+
+```{r visualisasi kategori untung}
+library(ggplot2)
+
+# Agregasi total pendapatan per kategori film
+kategori_untung <- data_full %>%
+  group_by(name_category) %>%
+  summarise(total_revenue = sum(total_spent, na.rm = TRUE)) %>%
+  arrange(desc(total_revenue)) # Urutkan dari besar ke kecil
+
+# Membuat Bar Chart
+ggplot(kategori_untung, aes(x = reorder(name_category, total_revenue), y = total_revenue)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() + # Membalik grafik agar nama kategori mudah dibaca (horizontal)
+  labs(
+    title = "Kategori Film Paling Menguntungkan bagi Perusahaan",
+    x = "Kategori Film",
+    y = "Total Pendapatan (USD)"
+  ) +
+  theme_minimal()
+```
+Interpretasi Hasil:
+Berdasarkan bar chart di atas, kategori film Sport merupakan kategori yang paling menguntungkan bagi perusahaan disusul oleh kategori film Sci-Fi. Sedangkan kategori film Music merupakan kategori yang paling rendah keuntungannya. Berarti untuk meningkatkan keuntungan, perusahaan dapat meningkatkan jumlah film dengan kategori Sports. Atau seperti membuat acara menonton film bareng dengan kategori Sports.
+
+<p style="font-weight: bold;"> Visualisasi Hubungan Aktivitas rental dengan Total Pembayaran Pelanggan.</p>
+
+```{r visualisasi hubungan rental & pembayaran}
+# Membuat Scatter Plot
+ggplot(customers_rental_analysis, aes(x = frekuensi, y = total_payment)) +
+  geom_point(alpha = 0.7, color = "darkgreen", size = 2) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) + # Garis tren hubungan
+  labs(
+    title = "Hubungan antara Aktivitas Rental dan Total Pembayaran",
+    x = "Aktivitas Rental (Frekuensi / Berapa kali menyewa)",
+    y = "Total Pembayaran Pelanggan (USD)"
+  ) +
+  theme_minimal()
+```
+
+Interpretasi Hasil:
+
+Dari scatter plot tersebut dapat dilihat titik-titik yang mewakili data setiap pelanggan membentuk pola memanjang naik secara konsisten dari kiri ke kanan. Dan pola ini mengikuti pola garis warna merah. Hal ini menunjukkan adanya hubungan positif yang sangat jelas antara aktivitas rental dan total pembayaran pelanggan. Artinya semakin tinggi aktivitas rental semakin tinggi juga total pembayaran pelanggannya.
+    Selanjutnya dari kerapatan titik terhadap garisnya dapat dilihat titik-titik itu sangat rapat di sekitar garis merah. Hal ini menunjukkan variasi nilai total pembayaran pelanggan sangat ditentukan oleh variasi jumlah aktivitas rental.
+    Karena total pembayaran pelanggan sangat berhubungan dengan aktivitas rental dibutuhkan strategi untuk meningkatkan keuntungan perusahaan. Jadi, untuk meningkatkan keuntungan dari maka strategi yang dapat digunakan adalah mendorong volume penyewaan atau aktivitas rental. Contohnya seperti membuat promo sewa 2 film gratis 1.
